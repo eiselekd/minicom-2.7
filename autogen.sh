@@ -6,8 +6,11 @@ AUTOMAKEVER=1.14
 
 set -x
 
-aclocal-$AUTOMAKEVER
+aclocal
+#-$AUTOMAKEVER
 [ "$?" != 0 ] && echo "aclocal-$AUTOMAKEVER not available or failed!" && exit 1
 autoheader || exit 1
-automake-$AUTOMAKEVER --add-missing --force --gnu || exit 1
+automake --add-missing --force --gnu || exit 1
 autoconf || exit 1
+
+./configure --prefix=/usr --sysconfdir=/etc/minicom
