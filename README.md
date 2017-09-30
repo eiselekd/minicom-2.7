@@ -11,9 +11,10 @@ You can then write to the serial connection while minicom is running via:
     f=`cat extrapty`
     echo "ls -la " > $f
 
-or read from it in parallel:
+or connect a second minicom to it:
 
-    cat $f
+    f=`cat extrapty`
+    minicom -D $f
     
 
 
