@@ -42,7 +42,11 @@ int check_io(int fd1, int fd2, int tmout, char *buf,
   i = fd1;
   if (fd2 > fd1)
     i = fd2;
-
+#ifdef USE_FD3  
+  if (fd3 > i)
+    i = fd3;
+#endif
+  
   FD_ZERO(&fds);
   if (fd1 >= 0)
     FD_SET(fd1, &fds);
@@ -52,11 +56,21 @@ int check_io(int fd1, int fd2, int tmout, char *buf,
     FD_SET(fd2, &fds);
   else
     fd2 = 0;
-
+#ifdef USE_FD3  
+  if (fd3 >= 0)
+    FD_SET(fd3, &fds);
+#endif
+  
   if (fd2 == 0 && io_pending)
     n = 2;
-  else if (select(i + 1, &fds, NULL, NULL, &tv) > 0)
+  else if (select(i + 1, &fds, NULL, NULL, &tv) > 0) {
     n = 1 * (FD_ISSET(fd1, &fds) > 0) + 2 * (FD_ISSET(fd2, &fds) > 0);
+#ifdef USE_FD3  
+    if (fd3 > -1 && (FD_ISSET(fd3, &fds) > 0)) {
+      n |= 4;
+    }
+#endif    
+  }
 
   /* If there is data put it in the buffer. */
   if (buf) {
@@ -68,6 +82,22 @@ int check_io(int fd1, int fd2, int tmout, char *buf,
         term_socket_close();
 #endif /* USE_SOCKET */
     }
+#ifdef USE_FD3  
+    if ((n & 4)) {
+      n |= 1; /* echo to screen */
+      int wr, r = 0, j = i > 0 ? i : 0, l = bufsize - 1 - j;
+
+      if (l > 0) /* forward second pipe to primary */
+	r = read(fd3, &buf[j], l);
+      
+      if (r>0&&fd1>=0) {
+	wr = write(fd1,&buf[j],r);
+	wr+=0; /* for warning */
+      }
+      //i += r;
+    }
+#endif
+    
     buf[i > 0 ? i : 0] = 0;
     if (bytes_read)
       *bytes_read = i;

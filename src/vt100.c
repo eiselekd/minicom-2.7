@@ -871,19 +871,34 @@ static void state7(int c)
   buf[pos++] = c;
 }
 
+#undef  VT_DO_EN
+#define VT_DO_EN
+
 static void output_s(const char *s)
 {
   mc_wputs(vt_win, s);
-  if (vt_docap == 1)
+  if (vt_docap == 1 && capfp)
     fputs(s, capfp);
+#if defined(USE_FD3) && defined(VT_DO_EN)
+  if (vt_docap == 1 && fd3io) {
+    fd3out(s,strlen(s));
+  }
+#endif
 }
-
+  
 static void output_c(const char c)
 {
   mc_wputc(vt_win, c);
-  if (vt_docap == 1)
+  if (vt_docap == 1 && capfp)
     fputc(c, capfp);
+#if defined(USE_FD3) && defined(VT_DO_EN)
+  if (fd3io)
+    fd3outc(c);
+#endif
 }
+
+extern FILE *log_file ;
+
 
 void vt_out(int ch)
 {
@@ -896,6 +911,22 @@ void vt_out(int ch)
   if (!ch)
     return;
 
+  /*
+    k:0xd
+    v:0xd
+    v:0xa
+    s:0xa
+    v:0x4d
+    s:0x4d
+  */
+
+  /*
+  if (!log_file)
+    log_file = fopen(logfile_name,"w");
+  if (log_file)
+    fprintf(log_file,"v:0x%x\n", ch), fflush(log_file);;
+  */
+  
   if (last_ch == '\n'
       && vt_line_timestamp != TIMESTAMP_LINE_OFF)
     {
@@ -935,8 +966,12 @@ void vt_out(int ch)
   c = (unsigned char)ch;
   last_ch = c;
 
-  if (vt_docap == 2) /* Literal. */
+  if (vt_docap == 2 && capfp) /* Literal. */
     fputc(c, capfp);
+#if defined(USE_FD3) && defined(VT_DO_EN)  
+  if (vt_docap == 2 && fd3io)
+    fd3outc(c);
+#endif  
 
   /* Process <31 chars first, even in an escape sequence. */
   switch (c) {
@@ -949,8 +984,13 @@ void vt_out(int ch)
       break;
     case '\r': /* Carriage return */
       mc_wputc(vt_win, c);
+#if defined(USE_FD3) && defined(VT_DO_EN)  
+      if (fd3io)
+	fd3outc(c);
+#endif  
       if (vt_addlf)
         output_c('\n');
+      
       break;
     case '\t': /* Non - destructive TAB */
       /* Find next tab stop. */
@@ -960,8 +1000,12 @@ void vt_out(int ch)
       if (f >= vt_win->xs)
         f = vt_win->xs - 1;
       mc_wlocate(vt_win, f, vt_win->cury);
-      if (vt_docap == 1)
+      if (vt_docap == 1 && capfp)
         fputc(c, capfp);
+#if defined(USE_FD3) && defined(VT_DO_EN)  
+      if (vt_docap == 1 && fd3io)
+	fd3outc(c);
+#endif
       break;
     case 013: /* Old Minix: CTRL-K = up */
       mc_wlocate(vt_win, vt_win->curx, vt_win->cury - 1);
@@ -1011,8 +1055,12 @@ void vt_out(int ch)
   /* Now see which state we are in. */
   switch (esc_s) {
     case 0: /* Normal character */
-      if (vt_docap == 1)
+      if (vt_docap == 1 && capfp)
         fputc(P_CONVCAP[0] == 'Y' ? vt_inmap[c] : c, capfp);
+#if defined(USE_FD3) && defined(VT_DO_EN)  
+      if (vt_docap == 1 && fd3io)
+        fd3outc(P_CONVCAP[0] == 'Y' ? vt_inmap[c] : c);
+#endif      
       if (!using_iconv()) {
         c = vt_inmap[c];    /* conversion 04.09.97 / jl */
 #if TRANSLATE

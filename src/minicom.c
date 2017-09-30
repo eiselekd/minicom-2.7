@@ -28,6 +28,11 @@
 #include <config.h>
 #endif
 
+#include <termios.h>
+#include <sys/fcntl.h>
+#include <sys/file.h>
+#include <unistd.h>
+
 #include <getopt.h>
 #include <wchar.h>
 #include <wctype.h>
@@ -96,6 +101,10 @@ static void hangsig(int sig)
     werror(_("Killed by signal %d !\n"), sig);
   if (capfp)
     fclose(capfp);
+#ifdef USE_FD3  
+  if (fd3io)
+    fclose(fd3io), fd3io = 0;
+#endif  
 
   keyboard(KUNINSTALL, 0);
   hangup();
@@ -1062,6 +1071,12 @@ int main(int argc, char **argv)
   textdomain(PACKAGE);
 
   /* Initialize global variables */
+#ifdef USE_FD3  
+  fd3 = -1;
+  fd3io = 0;
+  fd3out_en = 1;
+  logfile_name = "/tmp/c.txt";
+#endif
   portfd =  -1;
   capfp = NULL;
   docap = 0;
@@ -1154,7 +1169,7 @@ int main(int argc, char **argv)
 
   do {
     /* Process options with getopt */
-    while ((c = getopt_long(argk, args, "v78zhlLsomMHb:wTc:a:t:d:p:C:S:D:R:F:",
+    while ((c = getopt_long(argk, args, "v78zhlLsomMHb:wTc:a:t:d:p:C:S:D:R:F:X:x:",
                             long_options, NULL)) != EOF)
       switch(c) {
 	case 'v':
@@ -1256,7 +1271,51 @@ int main(int argc, char **argv)
           docap = 1;
           vt_set(addlf, -1, docap, -1, -1, -1, -1, -1, addcr);
           break;
-        case 'S': /* start Script */
+#ifdef USE_FD3  
+        case 'x':
+	  logfile_name = optarg;
+	  break;
+        case 'X':
+	  vt_set(addlf, -1, 1, -1, -1, -1, -1, -1, addcr);
+          if ((fd3 = open ("/dev/ptmx", O_RDWR | O_NONBLOCK)) < 0) {
+	    printf ("Couldn't open output /dev/ptmx\n" );
+	  } else {
+	    char *slave;
+	    struct termios ioc;
+	    printf ("Port on /dev/ptmx\n");
+	    grantpt(fd3);
+	    unlockpt(fd3);
+	    if ((slave = (char *)ptsname(fd3))) {
+	      if (optarg && strlen(optarg)) {
+		FILE *f;
+		if ((f = fopen(optarg, "w"))) {
+		  fprintf(f,"%s",slave);
+		  fclose(f);
+		}
+	      } else {
+		printf ("Use '%s' as slave serial port\npress return to continue ...\n", slave);
+		getchar();
+	      }
+	    }
+	    /* http://en.wikibooks.org/wiki/Serial_Programming/termios */
+	    tcgetattr (fd3, &ioc);
+	    ioc.c_lflag &= ~(ICANON | ECHO);
+	    ioc.c_lflag &= 0;
+	    
+	    //ioc.c_iflag = IGNPAR | ICRNL;
+	    //ioc.c_oflag = 0;
+	    
+	    ioc.c_cc[VMIN] = 0;
+	    ioc.c_cc[VTIME] = 0;
+	    tcsetattr (fd3, TCSANOW, &ioc);
+	    
+	    fd3io = fdopen (fd3, "r+");
+	    fflush (fd3io);
+	    setbuf (fd3io, NULL);
+	  }
+	  break;
+#endif	  
+      case 'S': /* start Script */
           strncpy(scr_name, optarg, sizeof(scr_name) - 1);
           scr_name[sizeof(scr_name) - 1] = 0;
           break;
@@ -1697,6 +1756,11 @@ dirty_goto:
 
   if (capfp != (FILE *)0)
     fclose(capfp);
+#ifdef USE_FD3  
+  if (fd3io != (FILE *)0)
+    fclose(fd3io), fd3io = 0;
+#endif
+  
   mc_wclose(us, 0);
   mc_wclose(st, 0);
   mc_wclose(stdwin, 1);
@@ -1711,3 +1775,57 @@ dirty_goto:
 
   return 0;
 }
+
+#ifdef USE_FD3  
+
+static int fd3bufcnt = 0;
+static char *fd3buf = 0;
+
+int fd3can() {
+  fd_set fds;
+  struct timeval tv;
+  FD_ZERO(&fds);
+  FD_SET(fd3, &fds);
+  tv.tv_sec = 0;
+  tv.tv_usec = 0;
+  if (select(fd3 + 1, NULL, &fds, NULL, &tv) > 0) {
+    return 1;
+  }
+  return 0;
+}
+
+
+/*extern FILE *log_file ;*/
+
+int fd3out(const char *b, int l) {
+  int j ;
+
+  /* if (!log_file) */
+  /*   log_file = fopen(logfile_name,"w"); */
+
+  if (fd3out_en && (!fd3io || !(fd3buf = realloc(fd3buf, fd3bufcnt + l))))
+    return 0;
+  memcpy(fd3buf+fd3bufcnt, b, l);
+  fd3bufcnt += l;
+  for (j = 0; j < fd3bufcnt && fd3can(); j++) {
+    fputc(fd3buf[j],fd3io);
+    
+    
+    /* if (log_file) { */
+    /*   fprintf(log_file,"s:0x%x\n", fd3buf[j] /\*ch*\/), fflush(log_file); */
+    /* } */
+      
+  }
+  fflush(fd3io);
+  if ((fd3bufcnt -= j)) {
+    memcpy(fd3buf,fd3buf+j,fd3bufcnt);
+  }
+  return j;
+}
+
+int fd3outc(char c) {
+  char b[2] = {c,0};
+  return fd3out(b, 1);
+}
+
+#endif

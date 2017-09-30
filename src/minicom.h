@@ -81,6 +81,16 @@ EXTERN int cursormode;	/* Mode of cursor (arrow) keys */
 
 EXTERN int docap;	/* Capture data to capture file */
 EXTERN FILE *capfp;	/* File to capture to */
+#define USE_FD3
+#ifdef USE_FD3
+EXTERN int fd3;	        /* Second channel */
+EXTERN int fd3out_en;
+EXTERN char *logfile_name;
+EXTERN FILE *fd3io;
+int fd3out(const char *b, int l);
+int fd3outc(char c);
+#endif
+
 EXTERN int addlf;	/* Add LF after CR */
 EXTERN int addcr;	/* Insert CR before LF */
 EXTERN int wrapln;	/* Linewrap default */
@@ -301,7 +311,6 @@ void domacros(void);
 
 int lockfile_create(int no_msgs);
 void lockfile_remove(void);
-
 
 
 /* We want the ANSI offsetof macro to do some dirty stuff. */

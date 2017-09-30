@@ -426,6 +426,22 @@ void updown(int what, int nr)
   mcd("");
   timer_update();
 
+  /* return code == 1 if exeve failed, see #111060 et al */
+  if (win && status == 0x0001) {
+#if VC_MUSIC
+	if (P_SOUND[0] == 'Y') {
+		mc_wprintf(win, _("\n Failure executing protocol. Press any key to continue..."));
+		music();
+	} else
+		sleep(1);
+#else
+	/* MARK updated 02/17/94 - If there was no VC_MUSIC capability, */
+	/* then at least make some beeps! */
+	if (P_SOUND[0] == 'Y') wprintf(win, "\007\007\007");
+	sleep(1);
+#endif
+  } else
+
   /* If we got interrupted, status != 0 */
   if (win && (status & 0xFF00) == 0) {
 #if VC_MUSIC

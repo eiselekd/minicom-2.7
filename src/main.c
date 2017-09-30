@@ -729,6 +729,13 @@ static void showtemp(void)
   tempst = 1;
 }
 
+
+#define VT_DO_KEY
+#undef  VT_DO_KEY
+
+FILE *log_file = 0;
+
+
 /*
  * The main terminal loop:
  *	- If there are characters received send them
@@ -770,6 +777,9 @@ dirty_goto:
 
   /* Main loop */
   while (1) {
+#ifdef USE_FD3  
+    fd3out_en = 1;
+#endif
     /* See if window size changed */
     if (size_changed) {
       size_changed = 0;
@@ -878,11 +888,24 @@ dirty_goto:
       }
       mc_wflush();
     }
-
+    
     /* Read from the keyboard and send to modem. */
     if ((x & 2) == 2) {
       /* See which key was pressed. */
       c = keyboard(KGETKEY, 0);
+
+      /* if (!log_file) */
+      /* 	log_file = fopen(logfile_name,"w"); */
+      
+      /* if (log_file) */
+      /* 	fprintf(log_file,"k:0x%x\n", c), fflush(log_file);; */
+
+      /* if (c == '\r') { */
+      /* 	if (log_file) */
+      /* 	  fprintf(log_file,"return\n", c), fflush(log_file);; */
+	
+      /* } */
+      
       if (c == EOF)
         return EOF;
 
@@ -920,6 +943,9 @@ dirty_goto:
 #else
         vt_send(c);
 #endif
+#if defined(USE_FD3) && defined(VT_DO_KEY)  
+	fd3outc(c);
+#endif	
         goto dirty_goto;
       }
 
@@ -941,9 +967,17 @@ dirty_goto:
         if (*s)
           mputs(s, 1);
         else
-          vt_send(c);
+          vt_send(c)
+#if defined(USE_FD3) && defined(VT_DO_KEY)  
+	    ,fd3outc(c)
+#endif	    
+	    ;
       } else
-        vt_send(c);
+        vt_send(c)
+#if defined(USE_FD3) && defined(VT_DO_KEY)  
+	  ,fd3outc(c)
+#endif
+	  ;
     }
   }
 }
