@@ -1168,8 +1168,9 @@ int main(int argc, char **argv)
   args[argk] = NULL;
 
   do {
+    int iscfmakeraw = 0;
     /* Process options with getopt */
-    while ((c = getopt_long(argk, args, "v78zhlLsomMHb:wTc:a:t:d:p:C:S:D:R:F:X:x:",
+    while ((c = getopt_long(argk, args, "v78zhlLsomMHb:wTc:a:t:d:p:C:S:D:R:F:Y:X:x:",
                             long_options, NULL)) != EOF)
       switch(c) {
 	case 'v':
@@ -1271,10 +1272,12 @@ int main(int argc, char **argv)
           docap = 1;
           vt_set(addlf, -1, docap, -1, -1, -1, -1, -1, addcr);
           break;
-#ifdef USE_FD3  
+#ifdef USE_FD3
         case 'x':
 	  logfile_name = optarg;
 	  break;
+        case 'Y':
+	  iscfmakeraw=1;
         case 'X':
 	  vt_set(addlf, -1, 1, -1, -1, -1, -1, -1, addcr);
           if ((fd3 = open ("/dev/ptmx", O_RDWR | O_NONBLOCK)) < 0) {
@@ -1299,22 +1302,26 @@ int main(int argc, char **argv)
 	    }
 	    /* http://en.wikibooks.org/wiki/Serial_Programming/termios */
 	    tcgetattr (fd3, &ioc);
-	    ioc.c_lflag &= ~(ICANON | ECHO);
-	    ioc.c_lflag &= 0;
-	    
-	    //ioc.c_iflag = IGNPAR | ICRNL;
-	    //ioc.c_oflag = 0;
-	    
-	    ioc.c_cc[VMIN] = 0;
-	    ioc.c_cc[VTIME] = 0;
+	    if (iscfmakeraw) {
+	      cfmakeraw(&ioc);
+	    } else {
+	      ioc.c_lflag &= ~(ICANON | ECHO);
+	      ioc.c_lflag &= 0;
+
+	      //ioc.c_iflag = IGNPAR | ICRNL;
+	      //ioc.c_oflag = 0;
+
+	      ioc.c_cc[VMIN] = 0;
+	      ioc.c_cc[VTIME] = 0;
+	    }
 	    tcsetattr (fd3, TCSANOW, &ioc);
-	    
+
 	    fd3io = fdopen (fd3, "r+");
 	    fflush (fd3io);
 	    setbuf (fd3io, NULL);
 	  }
 	  break;
-#endif	  
+#endif
       case 'S': /* start Script */
           strncpy(scr_name, optarg, sizeof(scr_name) - 1);
           scr_name[sizeof(scr_name) - 1] = 0;
